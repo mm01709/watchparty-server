@@ -57,6 +57,9 @@ wss.on("connection", (ws) => {
       case "chat":
         handleChat(ws, msg);
         break;
+      case "reaction":
+        handleReaction(ws, msg);
+        break;
     }
   });
 
@@ -198,6 +201,20 @@ wss.on("connection", (ws) => {
 
     // ابعت للكل (بما فيهم المرسل)
     broadcastToRoom(userRoom, null, chatMsg);
+  }
+
+  // ── Reaction ────────────────────────────────────────────────
+  function handleReaction(ws, msg) {
+    if (!msg.emoji) return;
+    const room = getRoomOf(ws);
+    if (!room) return;
+
+    // ابعت لباقي الأعضاء (مش للمرسل، عشان هو شافها بالفعل)
+    broadcastToRoom(userRoom, ws, {
+      type: "reaction",
+      username: userUsername,
+      emoji: String(msg.emoji).substring(0, 8)
+    });
   }
 
   // ── Helpers ─────────────────────────────────────────────────
