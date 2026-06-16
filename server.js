@@ -84,6 +84,12 @@ wss.on("connection", (ws) => {
       case "voice_leave":
         handleVoiceLeave(ws, msg);
         break;
+      // WebRTC signaling — بس بيتبعت للـ peer المحدد
+      case "voice_offer":
+      case "voice_answer":
+      case "voice_ice":
+        handleVoiceSignal(ws, msg);
+        break;
     }
   });
 
@@ -284,6 +290,18 @@ wss.on("connection", (ws) => {
     broadcastToRoom(userRoom, null, {
       type: "voice_state",
       voiceUids: room.voiceUids ? [...room.voiceUids] : []
+    });
+  }
+
+  // ── Voice Signaling (WebRTC offer/answer/ice) ───────────────
+  function handleVoiceSignal(ws, msg) {
+    const room = getRoomOf(ws);
+    if (!room || !msg.to) return;
+    // ابعت بس للـ peer المحدد (msg.to = username)
+    room.members.forEach((info, memberWs) => {
+      if (info.username === msg.to && memberWs.readyState === 1) {
+        memberWs.send(JSON.stringify({ ...msg, from: userUsername }));
+      }
     });
   }
 
