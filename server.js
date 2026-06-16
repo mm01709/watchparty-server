@@ -26,6 +26,31 @@ const wss = new WebSocketServer({ server: httpServer });
 // rooms: Map<roomId, { members, isPlaying, currentTime, lastUpdate, source, voiceUids, deleteTimer }>
 const rooms = new Map();
 
+// buffer للـ ICE candidates اللي وصلت قبل الـ offer/answer
+// Map<"roomId:from:to", candidate[]>
+const iceBuffer = new Map();
+
+function getIceKey(roomId, from, to) {
+  return `${roomId}:${from}:${to}`;
+}
+
+function bufferIce(roomId, from, to, candidate) {
+  const key = getIceKey(roomId, from, to);
+  if (!iceBuffer.has(key)) iceBuffer.set(key, []);
+  iceBuffer.get(key).push(candidate);
+  // امسح الـ buffer بعد 30 ثانية لو ماتم استخدامه
+  setTimeout(() => iceBuffer.delete(key), 30000);
+}
+
+function flushIce(roomId, from, to, ws) {
+  const key = getIceKey(roomId, from, to);
+  const candidates = iceBuffer.get(key) || [];
+  iceBuffer.delete(key);
+  for (const c of candidates) {
+    if (ws.readyState === 1) ws.send(JSON.stringify(c));
+  }
+}
+
 const ROOM_TTL_MS = 5 * 60 * 1000; // 5 دقايق قبل ما الغرفة الفاضية تتمسح
 
 function scheduleRoomDelete(roomId) {
@@ -89,6 +114,9 @@ wss.on("connection", (ws) => {
       case "voice_answer":
       case "voice_ice":
         handleVoiceSignal(ws, msg);
+        break;
+      case "ping":
+        // keep-alive من الـ client — نتجاهله بهدوء
         break;
     }
   });
@@ -297,12 +325,33 @@ wss.on("connection", (ws) => {
   function handleVoiceSignal(ws, msg) {
     const room = getRoomOf(ws);
     if (!room || !msg.to) return;
-    // ابعت بس للـ peer المحدد (msg.to = username)
+
+    const outMsg = { ...msg, from: userUsername };
+
+    // لو offer أو answer، ابعته وبعدين flush أي ICE كان متبفر
+    if (msg.type === "voice_offer" || msg.type === "voice_answer") {
+      room.members.forEach((info, memberWs) => {
+        if (info.username === msg.to && memberWs.readyState === 1) {
+          memberWs.send(JSON.stringify(outMsg));
+          // flush الـ ICE candidates المتبفرة
+          flushIce(userRoom, userUsername, msg.to, memberWs);
+        }
+      });
+      return;
+    }
+
+    // لو ice candidate، ابعته لو الـ peer موجود، وإلا buffer
+    let sent = false;
     room.members.forEach((info, memberWs) => {
       if (info.username === msg.to && memberWs.readyState === 1) {
-        memberWs.send(JSON.stringify({ ...msg, from: userUsername }));
+        memberWs.send(JSON.stringify(outMsg));
+        sent = true;
       }
     });
+    if (!sent) {
+      // الـ peer ما وصلتوش الـ offer بعد، نبفر الـ ICE
+      bufferIce(userRoom, userUsername, msg.to, outMsg);
+    }
   }
 
   // ── Set Source (مصدر الفيديو — خاص بالموقع/webapp) ──────────
