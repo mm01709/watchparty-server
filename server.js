@@ -11,9 +11,26 @@ const PORT = process.env.PORT || 3000;
 
 // ── HTTP Server (لازم لـ Render و Railway) ───────────────────
 const httpServer = http.createServer((req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
   if (req.url === "/health") {
-    res.writeHead(200);
+    res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ status: "ok", rooms: rooms.size }));
+  } else if (req.url?.startsWith("/room/")) {
+    // GET /room/:roomId — هل الغرفة موجودة وفيها حد؟
+    const roomId = req.url.slice(6).toUpperCase();
+    const room = rooms.get(roomId);
+    if (room && room.members.size > 0) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        exists: true,
+        members: room.members.size,
+        source: room.source || null,
+      }));
+    } else {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ exists: false }));
+    }
   } else {
     res.writeHead(200);
     res.end("🎬 WatchParty Server is running!");
