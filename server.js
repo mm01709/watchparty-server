@@ -31,6 +31,57 @@ const httpServer = http.createServer((req, res) => {
       res.writeHead(404, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ exists: false }));
     }
+  } else if (req.url?.startsWith("/yt/")) {
+    // GET /yt/:videoId — صفحة YouTube IFrame player
+    const videoId = req.url.slice(4).split("?")[0];
+    if (!videoId || !/^[a-zA-Z0-9_-]{6,16}$/.test(videoId)) {
+      res.writeHead(400);
+      res.end("Invalid video ID");
+      return;
+    }
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden}
+#p{width:100%;height:100%}
+</style>
+</head>
+<body>
+<div id="p"></div>
+<script>
+var tag=document.createElement('script');
+tag.src='https://www.youtube.com/iframe_api';
+document.head.appendChild(tag);
+var player;
+function onYouTubeIframeAPIReady(){
+  player=new YT.Player('p',{
+    videoId:'${videoId}',
+    width:'100%',height:'100%',
+    playerVars:{autoplay:0,controls:1,rel:0,modestbranding:1,playsinline:1,enablejsapi:1},
+    events:{
+      onReady:function(e){
+        if(window.PlayerBridge) PlayerBridge.postMessage(JSON.stringify({t:'ready',s:0}));
+      },
+      onStateChange:function(e){
+        var s=e.data,ct=player.getCurrentTime()||0;
+        if(!window.PlayerBridge) return;
+        if(s===1) PlayerBridge.postMessage(JSON.stringify({t:'play',s:ct}));
+        else if(s===2) PlayerBridge.postMessage(JSON.stringify({t:'pause',s:ct}));
+      }
+    }
+  });
+}
+function ytPlay(){if(player)player.playVideo();}
+function ytPause(){if(player)player.pauseVideo();}
+function ytSeek(t){if(player)player.seekTo(t,true);}
+</script>
+</body>
+</html>`;
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(html);
   } else {
     res.writeHead(200);
     res.end("🎬 WatchParty Server is running!");
