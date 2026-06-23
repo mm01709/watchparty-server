@@ -349,8 +349,8 @@ wss.on("connection", (ws) => {
 
     console.log(`[💬] ${userUsername} in ${userRoom}: ${chatMsg.text}`);
 
-    // ابعت للكل (بما فيهم المرسل)
-    broadcastToRoom(userRoom, null, chatMsg);
+    // ابعت للباقيين بس (المرسل شايفها بالفعل)
+    broadcastToRoom(userRoom, ws, chatMsg);
   }
 
   // ── Reaction ────────────────────────────────────────────────
