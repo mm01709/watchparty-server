@@ -183,6 +183,9 @@ wss.on("connection", (ws) => {
       case "voice_ice":
         handleVoiceSignal(ws, msg);
         break;
+      case "pdf_page":
+        handlePdfPage(ws, msg);
+        break;
       case "ping":
         // keep-alive من الـ client — نتجاهله بهدوء
         break;
@@ -420,6 +423,14 @@ wss.on("connection", (ws) => {
       // الـ peer ما وصلتوش الـ offer بعد، نبفر الـ ICE
       bufferIce(userRoom, userUsername, msg.to, outMsg);
     }
+  }
+
+  // ── PDF Page sync ────────────────────────────────────────────
+  function handlePdfPage(ws, msg) {
+    if (msg.page == null) return;
+    const room = getRoomOf(ws);
+    if (!room) return;
+    broadcastToRoom(userRoom, ws, { type: "pdf_page", page: msg.page });
   }
 
   // ── Set Source (مصدر الفيديو — خاص بالموقع/webapp) ──────────
