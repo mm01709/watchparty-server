@@ -183,6 +183,9 @@ wss.on("connection", (ws) => {
       case "voice_ice":
         handleVoiceSignal(ws, msg);
         break;
+      case "voice_mute":
+        handleVoiceSignal(ws, msg);
+        break;
       case "pdf_page":
         handlePdfPage(ws, msg);
         break;
@@ -260,7 +263,8 @@ wss.on("connection", (ws) => {
       isPlaying: room.isPlaying,
       currentTime: getAdjustedTime(room),
       memberCount: room.members.size,
-      source: room.source || null
+      source: room.source || null,
+      currentPdfPage: room.currentPdfPage || null
     });
 
     // لو الغرفة عندها source، ابعته كمان كـ source message منفردة
@@ -395,7 +399,20 @@ wss.on("connection", (ws) => {
   // ── Voice Signaling (WebRTC offer/answer/ice) ───────────────
   function handleVoiceSignal(ws, msg) {
     const room = getRoomOf(ws);
-    if (!room || !msg.to) return;
+    if (!room) return;
+
+    // voice_mute يتبعت لكل الأعضاء التانيين
+    if (msg.type === "voice_mute") {
+      const outMsg = { ...msg, from: userUsername };
+      room.members.forEach((info, memberWs) => {
+        if (memberWs !== ws && memberWs.readyState === 1) {
+          memberWs.send(JSON.stringify(outMsg));
+        }
+      });
+      return;
+    }
+
+    if (!msg.to) return;
 
     const outMsg = { ...msg, from: userUsername };
 
@@ -430,6 +447,7 @@ wss.on("connection", (ws) => {
     if (msg.page == null) return;
     const room = getRoomOf(ws);
     if (!room) return;
+    room.currentPdfPage = msg.page;
     broadcastToRoom(userRoom, ws, { type: "pdf_page", page: msg.page });
   }
 
